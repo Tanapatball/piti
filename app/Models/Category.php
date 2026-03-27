@@ -18,6 +18,14 @@ class Category extends Model
         'category_name',
     ];
 
+    /**
+     * Get the route key for the model.
+     */
+    public function getRouteKeyName(): string
+    {
+        return 'category_id';
+    }
+
     // หมวดหมู่มีหลายสินค้า
     public function products()
     {

@@ -56,16 +56,19 @@ class CategoryController extends Controller
     /**
      * แสดงฟอร์มแก้ไขหมวดสินค้า
      */
-    public function edit(Category $category)
+    public function edit(string $category)
     {
+        $category = Category::where('category_id', urldecode($category))->firstOrFail();
         return view('categories.edit', compact('category'));
     }
 
     /**
      * อัปเดตข้อมูลหมวดสินค้า
      */
-    public function update(Request $request, Category $category)
+    public function update(Request $request, string $category)
     {
+        $category = Category::where('category_id', urldecode($category))->firstOrFail();
+
         $request->validate([
             'category_name' => 'required|string|max:100',
         ]);
@@ -81,8 +84,9 @@ class CategoryController extends Controller
     /**
      * ลบหมวดสินค้า
      */
-    public function destroy(Category $category)
+    public function destroy(string $category)
     {
+        $category = Category::where('category_id', urldecode($category))->firstOrFail();
         $category->delete();
 
         return redirect()->route('categories.index')

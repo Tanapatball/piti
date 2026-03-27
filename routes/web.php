@@ -42,7 +42,15 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('products', ProductController::class)->only(['index', 'show']);
 
     // Categories (เฉพาะ admin/staff)
-    Route::resource('categories', CategoryController::class)->middleware('role:admin,staff');
+    // ใช้ explicit routes แทน resource เพราะ category_id อาจมี "/" อยู่
+    Route::controller(CategoryController::class)->middleware('role:admin,staff')->group(function () {
+        Route::get('categories', 'index')->name('categories.index');
+        Route::get('categories/create', 'create')->name('categories.create');
+        Route::post('categories', 'store')->name('categories.store');
+        Route::get('categories/{category}/edit', 'edit')->name('categories.edit')->where('category', '.*');
+        Route::put('categories/{category}', 'update')->name('categories.update')->where('category', '.*');
+        Route::delete('categories/{category}', 'destroy')->name('categories.destroy')->where('category', '.*');
+    });
 
     // Warehouses (เฉพาะ admin/staff)
     Route::resource('warehouses', WarehouseController::class)->middleware('role:admin,staff');

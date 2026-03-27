@@ -46,8 +46,8 @@
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $category->category_id }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $category->category_name }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm flex gap-2">
-                                <a href="{{ route('categories.edit', $category) }}" class="text-indigo-600 hover:text-indigo-900">Edit</a>
-                                <form action="{{ route('categories.destroy', $category) }}" method="POST" onsubmit="return confirm('ลบหมวดสินค้านี้?')">
+                                <a href="{{ route('categories.edit', urlencode($category->category_id)) }}" class="text-indigo-600 hover:text-indigo-900">Edit</a>
+                                <form action="{{ route('categories.destroy', urlencode($category->category_id)) }}" method="POST" onsubmit="return confirm('ลบหมวดสินค้านี้?')">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
