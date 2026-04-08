@@ -316,7 +316,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-1">เลขที่</label>
-                        <input type="text" name="trans_id" class="w-full border rounded px-3 py-2" value="${trans.trans_id}">
+                        <input type="text" class="w-full border rounded px-3 py-2 bg-gray-100 cursor-not-allowed" value="${trans.trans_id}" readonly>
+                        <input type="hidden" name="trans_id" value="${trans.trans_id}">
                     </div>
                     <div>
                         <label class="block text-gray-700 text-sm font-medium mb-1">วันเข้าคลัง</label>

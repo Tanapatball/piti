@@ -56,7 +56,16 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('warehouses', WarehouseController::class)->middleware('role:admin,staff');
 
     // Transactions (รับสินค้า — เฉพาะ admin/staff)
-    Route::resource('transactions', TransactionController::class)->middleware('role:admin,staff');
+    // ใช้ explicit routes แทน resource เพราะ trans_id อาจมี "/" อยู่
+    Route::controller(TransactionController::class)->middleware('role:admin,staff')->group(function () {
+        Route::get('transactions', 'index')->name('transactions.index');
+        Route::get('transactions/create', 'create')->name('transactions.create');
+        Route::post('transactions', 'store')->name('transactions.store');
+        Route::get('transactions/{transaction}', 'show')->name('transactions.show')->where('transaction', '.*');
+        Route::get('transactions/{transaction}/edit', 'edit')->name('transactions.edit')->where('transaction', '.*');
+        Route::put('transactions/{transaction}', 'update')->name('transactions.update')->where('transaction', '.*');
+        Route::delete('transactions/{transaction}', 'destroy')->name('transactions.destroy')->where('transaction', '.*');
+    });
 
     // Stock Outs (เบิกสินค้า — เฉพาะ admin/staff)
     Route::resource('stock-outs', StockOutController::class)->parameters([

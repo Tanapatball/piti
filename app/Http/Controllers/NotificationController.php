@@ -29,7 +29,7 @@ class NotificationController extends Controller
     public function dropdown(): JsonResponse
     {
         $notifications = Notification::forUser(Auth::id())
-            ->with('product:id,name,code')
+            ->with('product:product_id,name')
             ->orderByDesc('created_at')
             ->limit(10)
             ->get();
@@ -51,9 +51,8 @@ class NotificationController extends Controller
                     'is_read' => $n->isRead(),
                     'created_at' => $n->created_at->diffForHumans(),
                     'product' => $n->product ? [
-                        'id' => $n->product->id,
+                        'id' => $n->product->product_id,
                         'name' => $n->product->name,
-                        'code' => $n->product->code,
                     ] : null,
                 ];
             }),

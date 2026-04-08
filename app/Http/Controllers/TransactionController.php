@@ -381,10 +381,6 @@ class TransactionController extends Controller
 
     public function update(Request $request, Transaction $transaction)
     {
-        $oldTransId = $transaction->trans_id;
-        $newTransId = $request->trans_id ?? $oldTransId;
-
-        // Validate trans_id uniqueness only if changed
         $rules = [
             'trans_date' => 'required|date',
             'receive_type_id' => 'nullable|exists:receive_types,receive_type_id',
@@ -394,10 +390,6 @@ class TransactionController extends Controller
             'items.*.fraction_qty' => 'nullable|integer|min:0',
             'items.*.net_weight' => 'nullable|numeric|min:0',
         ];
-
-        if ($newTransId !== $oldTransId) {
-            $rules['trans_id'] = 'required|unique:transactions,trans_id';
-        }
 
         $request->validate($rules);
 
@@ -413,33 +405,18 @@ class TransactionController extends Controller
         // ลบ items เดิม
         $transaction->items()->delete();
 
-        // อัปเดตข้อมูล transaction (รวม trans_id ถ้าเปลี่ยน)
-        if ($newTransId !== $oldTransId) {
-            // ต้อง update ผ่าน DB query เพราะเป็น primary key
-            DB::table('transactions')->where('trans_id', $oldTransId)->update([
-                'trans_id' => $newTransId,
-                'trans_date' => $request->trans_date,
-                'reference_doc' => $request->doc_ref,
-                'reference_no' => $request->ref_no,
-                'receive_type_id' => $request->receive_type_id,
-                'note' => $request->note,
-                'updated_at' => now(),
-            ]);
-        } else {
-            $transaction->update([
-                'trans_date' => $request->trans_date,
-                'reference_doc' => $request->doc_ref,
-                'reference_no' => $request->ref_no,
-                'receive_type_id' => $request->receive_type_id,
-                'note' => $request->note,
-            ]);
-        }
-
-        $finalTransId = $newTransId;
+        // อัปเดตข้อมูล transaction (ไม่เปลี่ยน trans_id)
+        $transaction->update([
+            'trans_date' => $request->trans_date,
+            'reference_doc' => $request->doc_ref,
+            'reference_no' => $request->ref_no,
+            'receive_type_id' => $request->receive_type_id,
+            'note' => $request->note,
+        ]);
 
         foreach ($request->items as $item) {
             TransactionItem::create([
-                'trans_id' => $finalTransId,
+                'trans_id' => $transaction->trans_id,
                 'product_id' => $item['product_id'],
                 'code' => $item['code'] ?? null,
                 'item_code' => $item['item_code'] ?? null,

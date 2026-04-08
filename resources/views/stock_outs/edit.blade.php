@@ -22,9 +22,9 @@
 
             {{-- เลือกเลขที่ (Transaction) --}}
             <div class="mb-4">
-                <label class="block text-gray-700">เลือกเลขที่อ้างอิง</label>
-                <select id="transSelect" class="w-full border rounded px-3 py-2">
-                    <option value="">-- เลือกเลขที่ --</option>
+                <label class="block text-gray-700">เลขที่อ้างอิง</label>
+                <input type="text" class="w-full border rounded px-3 py-2 bg-gray-100 cursor-not-allowed" value="{{ $stockOut->trans_id }}" readonly>
+                <select id="transSelect" class="hidden">
                     @foreach($transactions as $t)
                         <option value="{{ $t->trans_id }}"
                                 data-items='@json($t->items)'
@@ -239,45 +239,8 @@
         `;
     }
 
-    // Event listener for transaction select change
-    transSelect.addEventListener('change', function() {
-        const selectedTrans = this.value;
-        document.getElementById('trans_id').value = selectedTrans;
-
-        if (!selectedTrans) {
-            tbody.innerHTML = '';
-            transactionItems = [];
-            transMap = {};
-            return;
-        }
-
-        const items = this.selectedOptions[0]?.dataset.items;
-        if (!items) return;
-
-        transactionItems = JSON.parse(items);
-        transMap = {};
-        transactionItems.forEach(item => {
-            const key = item.product_id + '_' + (item.code || '');
-            transMap[key] = {
-                full_qty: item.full_qty,
-                fraction_qty: item.fraction_qty,
-                product_name: item.product?.name,
-                weight: item.product?.weight_per_kg || 0,
-                size: item.product?.size,
-                pack: item.product?.pack
-            };
-        });
-
-        // If it's the original transaction, render existing items with their quantities
-        if (selectedTrans === originalTransId && isInitialLoad) {
-            renderExistingRows();
-        } else {
-            // New transaction selected, render fresh items with 0 quantities
-            renderNewTransactionRows();
-        }
-
-        isInitialLoad = false;
-    });
+    // Transaction select is now disabled - no change event needed
+    // Keep the original transaction items loaded for reference
 
     // Add new row from available items
     function addNewRow() {

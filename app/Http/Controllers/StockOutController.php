@@ -282,7 +282,7 @@ class StockOutController extends Controller
     public function create()
     {
         $products = Product::all();
-        $transactions = Transaction::with('items.product')->get();
+        $transactions = Transaction::with('items.product')->orderBy('trans_date', 'desc')->orderBy('trans_id', 'desc')->get();
         $issueTypes = IssueType::all();
         return view('stock_outs.create', compact('products', 'transactions', 'issueTypes'));
     }
@@ -347,33 +347,7 @@ class StockOutController extends Controller
                 continue;
             }
 
-            // ✅ ตัดสต๊อกตาม Transaction ที่เลือก (Specific Identification)
-            if ($request->trans_id) {
-                $query = TransactionItem::where('trans_id', $request->trans_id)
-                    ->where('product_id', $item['product_id']);
-                
-                if (!empty($item['code'])) {
-                    $query->where('code', $item['code']);
-                }
-
-                $transactionItem = $query->first();
-
-                if (!$transactionItem) {
-                    return back()->withErrors("ไม่พบรายการสินค้า {$item['product_id']} ใน Transaction {$request->trans_id}");
-                }
-
-                // เช็คยอดคงเหลือใน Lot นั้น
-                if ($transactionItem->full_qty < $fullQtyReq) {
-                     return back()->withErrors("สินค้า {$item['product_id']} ใน Lot {$request->trans_id} เหลือไม่พอ (มี: {$transactionItem->full_qty}, ขอเบิก: {$fullQtyReq})");
-                }
-                
-                // ตัดยอด
-                $transactionItem->full_qty -= $fullQtyReq;
-                $transactionItem->fraction_qty -= $fractionReq; 
-                $transactionItem->save();
-            }
-
-            // ✅ บันทึกลงตาราง stock_outs
+            // ✅ บันทึกลงตาราง stock_outs (ไม่ลด TransactionItem เพราะคำนวณจาก รับเข้า - เบิกออก)
             StockOut::create([
                 'product_id'    => $item['product_id'],
                 'issue_type_id' => $request->issue_type_id,
@@ -430,7 +404,7 @@ class StockOutController extends Controller
         }
 
         $products = Product::all();
-        $transactions = Transaction::with('items.product')->get(); // โหลดรายการเพื่อใช้ใน JS
+        $transactions = Transaction::with('items.product')->orderBy('trans_date', 'desc')->orderBy('trans_id', 'desc')->get(); // โหลดรายการเพื่อใช้ใน JS
         $issueTypes = IssueType::all();
 
         return view('stock_outs.edit', compact('stockOut', 'siblings', 'products', 'transactions', 'issueTypes'));
@@ -449,8 +423,6 @@ class StockOutController extends Controller
         ]);
 
         $oldTransId = $stockOut->trans_id;
-        $newTransId = $request->trans_id;
-        $transIdChanged = ($oldTransId != $newTransId);
 
         // 1. ค้นหารายการเดิมทั้งหมด (Siblings)
         $siblings = StockOut::where('trans_id', $oldTransId)
@@ -459,88 +431,6 @@ class StockOutController extends Controller
             ->where('reference_doc', $stockOut->reference_doc)
             ->whereDate('created_at', $stockOut->created_at->toDateString())
             ->get();
-
-        // ถ้าเปลี่ยน trans_id -> คืนสต๊อกเดิมทั้งหมดแล้วลบ, จากนั้นสร้างใหม่
-        if ($transIdChanged) {
-            // คืนสต๊อกให้ TransactionItem เดิมทั้งหมด
-            foreach ($siblings as $record) {
-                if ($record->trans_id) {
-                    $query = TransactionItem::where('trans_id', $record->trans_id)
-                        ->where('product_id', $record->product_id);
-                    if ($record->code) $query->where('code', $record->code);
-
-                    $transItem = $query->first();
-                    if ($transItem) {
-                        $transItem->full_qty += $record->quantity;
-                        $transItem->fraction_qty += ($record->fraction_qty ?? 0);
-                        $transItem->save();
-                    }
-                }
-
-                // คืน current_stock
-                $prod = Product::find($record->product_id);
-                if ($prod) {
-                    $prod->current_stock += $record->quantity;
-                    $prod->save();
-                }
-
-                $record->delete();
-            }
-
-            // สร้างรายการใหม่จาก trans_id ใหม่
-            foreach ($request->items as $item) {
-                $fullQtyReq = (int)($item['quantity'] ?? 0);
-                $fractionReq = (int)($item['fraction_qty'] ?? 0);
-
-                if ($fullQtyReq <= 0 && $fractionReq <= 0) continue;
-
-                // ตัดสต๊อกจาก TransactionItem ใหม่
-                if ($newTransId) {
-                    $query = TransactionItem::where('trans_id', $newTransId)
-                        ->where('product_id', $item['product_id']);
-                    if (!empty($item['code'])) $query->where('code', $item['code']);
-
-                    $transItem = $query->first();
-
-                    if (!$transItem) {
-                        return back()->withErrors("ไม่พบสินค้า {$item['product_id']} ใน Transaction {$newTransId}");
-                    }
-                    if ($transItem->full_qty < $fullQtyReq) {
-                        return back()->withErrors("สินค้า {$item['product_id']} ใน Lot {$newTransId} เหลือไม่พอ");
-                    }
-
-                    $transItem->full_qty -= $fullQtyReq;
-                    $transItem->fraction_qty -= $fractionReq;
-                    $transItem->save();
-                }
-
-                // สร้าง StockOut ใหม่
-                StockOut::create([
-                    'product_id'    => $item['product_id'],
-                    'issue_type_id' => $request->issue_type_id,
-                    'code'          => $item['code'] ?? null,
-                    'trans_id'      => $newTransId,
-                    'reference_doc' => $request->reference_doc,
-                    'reference_no'  => $request->reference_no,
-                    'quantity'      => $fullQtyReq,
-                    'fraction_qty'  => $fractionReq,
-                    'user_id'       => Auth::id(),
-                    'issued_date'   => $request->issued_date,
-                    'note'          => $request->note,
-                ]);
-
-                // ลด current_stock
-                $product = Product::find($item['product_id']);
-                if ($product) {
-                    $product->current_stock -= $fullQtyReq;
-                    $product->save();
-                }
-            }
-
-            return redirect()->route('stock-outs.index')->with('success', 'แก้ไขข้อมูลการเบิกเรียบร้อยแล้ว');
-        }
-
-        // ถ้าไม่ได้เปลี่ยน trans_id -> ทำงานแบบเดิม
         // Map siblings by ID for easy lookup
         $existingItems = $siblings->keyBy('id');
         $processedIds = [];
@@ -561,28 +451,9 @@ class StockOutController extends Controller
                 $processedIds[] = $existingId;
 
                 $diffFull = $fullQtyReq - $record->quantity;
-                $diffFraction = $fractionReq - ($record->fraction_qty ?? 0);
 
-                if ($diffFull != 0 || $diffFraction != 0) {
-                    // จัดการ TransactionItem (Source)
-                    if ($record->trans_id) {
-                        $transItem = TransactionItem::where('trans_id', $record->trans_id)
-                            ->where('product_id', $record->product_id)
-                            ->where('code', $record->code)
-                            ->first();
-
-                        if ($transItem) {
-                            // Check stock availability (if increasing)
-                            if ($diffFull > 0 && $transItem->full_qty < $diffFull) {
-                                return back()->withErrors("สินค้า {$record->product_id} (Code: {$record->code}) เหลือไม่พอให้เพิ่มยอด");
-                            }
-                            $transItem->full_qty -= $diffFull;
-                            $transItem->fraction_qty -= $diffFraction;
-                            $transItem->save();
-                        }
-                    }
-
-                    // จัดการ Product Master Stock
+                // จัดการ Product Master Stock (ไม่ต้องจัดการ TransactionItem)
+                if ($diffFull != 0) {
                     $prod = Product::find($record->product_id);
                     if ($prod) {
                         $prod->current_stock -= $diffFull;
@@ -602,30 +473,7 @@ class StockOutController extends Controller
                 ]);
 
             } else {
-                // --- CASE: New Item ---
-                // Similar to store() logic
-
-                // 1. Check & Deduct TransactionItem
-                if ($request->trans_id) {
-                    $query = TransactionItem::where('trans_id', $request->trans_id)
-                        ->where('product_id', $itemData['product_id']);
-                    if (!empty($itemData['code'])) $query->where('code', $itemData['code']);
-
-                    $transItem = $query->first();
-
-                    if (!$transItem) {
-                         return back()->withErrors("ไม่พบสินค้า {$itemData['product_id']} ใน Transaction {$request->trans_id}");
-                    }
-                    if ($transItem->full_qty < $fullQtyReq) {
-                         return back()->withErrors("สินค้า {$itemData['product_id']} เหลือไม่พอ");
-                    }
-
-                    $transItem->full_qty -= $fullQtyReq;
-                    $transItem->fraction_qty -= $fractionReq;
-                    $transItem->save();
-                }
-
-                // 2. Create Record
+                // --- CASE: New Item (ไม่ต้องตัด TransactionItem) ---
                 StockOut::create([
                     'product_id'    => $itemData['product_id'],
                     'issue_type_id' => $request->issue_type_id,
@@ -640,7 +488,7 @@ class StockOutController extends Controller
                     'note'          => $request->note,
                 ]);
 
-                // 3. Deduct Master Stock
+                // Deduct Master Stock
                 $prod = Product::find($itemData['product_id']);
                 if ($prod) {
                     $prod->current_stock -= $fullQtyReq;
@@ -649,23 +497,9 @@ class StockOutController extends Controller
             }
         }
 
-        // 3. ลบรายการที่หายไป (Deleted)
+        // 3. ลบรายการที่หายไป (Deleted) — คืนเฉพาะ current_stock (ไม่แตะ TransactionItem)
         foreach ($existingItems as $id => $record) {
             if (!in_array($id, $processedIds)) {
-                // Restore Stock
-                if ($record->trans_id) {
-                    $query = TransactionItem::where('trans_id', $record->trans_id)
-                        ->where('product_id', $record->product_id);
-                    if ($record->code) $query->where('code', $record->code);
-
-                    $transItem = $query->first();
-                    if ($transItem) {
-                        $transItem->full_qty += $record->quantity;
-                        $transItem->fraction_qty += ($record->fraction_qty ?? 0);
-                        $transItem->save();
-                    }
-                }
-
                 $prod = Product::find($record->product_id);
                 if ($prod) {
                     $prod->current_stock += $record->quantity;
@@ -679,27 +513,9 @@ class StockOutController extends Controller
         return redirect()->route('stock-outs.index')->with('success', 'แก้ไขข้อมูลการเบิกเรียบร้อยแล้ว');
     }
 
-    // ลบการเบิก (คืนสต๊อกกลับ)
+    // ลบการเบิก (คืนเฉพาะ current_stock — ไม่แตะ TransactionItem เพราะไม่ได้ลดตอนเบิก)
     public function destroy(StockOut $stockOut)
     {
-        // คืนจำนวนสินค้ากลับเข้า TransactionItem (เฉพาะกรณีที่มีการระบุ Source Transaction)
-        if ($stockOut->trans_id) {
-            $query = TransactionItem::where('product_id', $stockOut->product_id)
-                ->where('trans_id', $stockOut->trans_id);
-
-            if ($stockOut->code) {
-                $query->where('code', $stockOut->code);
-            }
-
-            $transactionItem = $query->first();
-
-            if ($transactionItem) {
-                $transactionItem->full_qty += $stockOut->quantity;
-                $transactionItem->fraction_qty += ($stockOut->fraction_qty ?? 0);
-                $transactionItem->save();
-            }
-        }
-
         // คืน current_stock กลับ
         $product = Product::find($stockOut->product_id);
         if ($product) {

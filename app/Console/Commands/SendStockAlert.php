@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Mail\StockAlertMail;
+use App\Models\Notification;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -25,6 +26,9 @@ class SendStockAlert extends Command
             $this->info('ไม่มีสินค้าที่ต้องแจ้งเตือน');
             return self::SUCCESS;
         }
+
+        // สร้าง Notification ในระบบ (แจ้งเตือนที่ระฆัง)
+        $this->createNotifications($lowStock, $overStock);
 
         // ถ้าระบุ --to ส่งไปที่เดียว (manual send จาก Dashboard)
         if ($this->option('to')) {
@@ -51,5 +55,54 @@ class SendStockAlert extends Command
         $this->info("- สต็อกต่ำ: {$lowStock->count()} รายการ | สต็อกเกิน: {$overStock->count()} รายการ");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * สร้าง Notification ในระบบสำหรับสินค้าที่สต็อกผิดปกติ
+     */
+    protected function createNotifications($lowStock, $overStock): void
+    {
+        // สร้าง Notification สำหรับสินค้าสต็อกต่ำ
+        foreach ($lowStock as $product) {
+            // ตรวจสอบว่ามี notification สำหรับสินค้านี้ที่ยังไม่ได้อ่านอยู่หรือไม่
+            $exists = Notification::where('product_id', $product->product_id)
+                ->where('type', 'stock_low')
+                ->whereNull('read_at')
+                ->where('created_at', '>=', now()->subHours(24))
+                ->exists();
+
+            if (!$exists) {
+                Notification::create([
+                    'type' => 'stock_low',
+                    'title' => 'สต็อกต่ำกว่ากำหนด',
+                    'message' => "สินค้า {$product->name} (รหัส: {$product->product_id}) มีจำนวนคงเหลือ {$product->current_stock} ต่ำกว่าขั้นต่ำที่กำหนด ({$product->stock_min})",
+                    'icon' => 'arrow-down',
+                    'color' => 'red',
+                    'link' => route('products.show', $product->product_id),
+                    'product_id' => $product->product_id,
+                ]);
+            }
+        }
+
+        // สร้าง Notification สำหรับสินค้าสต็อกเกิน
+        foreach ($overStock as $product) {
+            $exists = Notification::where('product_id', $product->product_id)
+                ->where('type', 'stock_over')
+                ->whereNull('read_at')
+                ->where('created_at', '>=', now()->subHours(24))
+                ->exists();
+
+            if (!$exists) {
+                Notification::create([
+                    'type' => 'stock_over',
+                    'title' => 'สต็อกเกินกำหนด',
+                    'message' => "สินค้า {$product->name} (รหัส: {$product->product_id}) มีจำนวนคงเหลือ {$product->current_stock} เกินสูงสุดที่กำหนด ({$product->stock_max})",
+                    'icon' => 'arrow-up',
+                    'color' => 'yellow',
+                    'link' => route('products.show', $product->product_id),
+                    'product_id' => $product->product_id,
+                ]);
+            }
+        }
     }
 }

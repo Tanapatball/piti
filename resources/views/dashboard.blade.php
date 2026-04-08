@@ -164,6 +164,19 @@
                     </div>
                     @endif
 
+                    {{-- Search Box --}}
+                    <div class="mb-3">
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                            </div>
+                            <input type="text" id="stockSearch" placeholder="ค้นหา รหัสสินค้า หรือ ชื่อสินค้า..." class="w-full sm:w-80 pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition placeholder-gray-400">
+                            <button type="button" id="stockSearchClear" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition hidden">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
                     {{-- Stock Table --}}
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm" id="stock-table">
@@ -221,7 +234,9 @@
                     </div>
 
                     <div class="mt-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
-                        <span>ทั้งหมด {{ $allProducts->count() }} รายการ | ปกติ {{ $normalCount }} | ต่ำ {{ $lowCount }} | เกิน {{ $overCount }}</span>
+                        <span id="stockFilterCount">ทั้งหมด {{ $allProducts->count() }} รายการ</span>
+                        <span class="text-gray-300">|</span>
+                        <span>ปกติ {{ $normalCount }} | ต่ำ {{ $lowCount }} | เกิน {{ $overCount }}</span>
 
                         {{-- Pagination Controls --}}
                         <div class="flex items-center gap-2">
@@ -245,33 +260,79 @@
                 </div>
             </div>
 
-            {{-- Pagination Script --}}
+            {{-- Pagination + Search Script --}}
             <script>
                 (function() {
                     let currentPage = 1;
                     let perPage = 10;
+                    let searchTerm = '';
                     const table = document.querySelector('#stock-table tbody');
-                    const rows = Array.from(table.querySelectorAll('tr'));
-                    const totalItems = rows.length;
+                    const allRows = Array.from(table.querySelectorAll('tr'));
+                    const searchInput = document.getElementById('stockSearch');
+                    const clearBtn = document.getElementById('stockSearchClear');
+
+                    function getFilteredRows() {
+                        if (!searchTerm) return allRows;
+                        return allRows.filter(row => {
+                            const cells = row.querySelectorAll('td');
+                            const productId = (cells[0]?.textContent || '').toLowerCase();
+                            const productName = (cells[1]?.textContent || '').toLowerCase();
+                            return productId.includes(searchTerm) || productName.includes(searchTerm);
+                        });
+                    }
 
                     function updatePagination() {
-                        const totalPages = Math.ceil(totalItems / perPage);
+                        const filtered = getFilteredRows();
+                        const totalFiltered = filtered.length;
+                        const totalPages = Math.max(1, Math.ceil(totalFiltered / perPage));
+
+                        if (currentPage > totalPages) currentPage = totalPages;
+
                         document.getElementById('currentPage').textContent = currentPage;
                         document.getElementById('totalPages').textContent = totalPages;
-
                         document.getElementById('prevPage').disabled = currentPage <= 1;
                         document.getElementById('nextPage').disabled = currentPage >= totalPages;
 
                         const start = (currentPage - 1) * perPage;
                         const end = start + perPage;
 
-                        rows.forEach((row, index) => {
+                        // Hide all rows first
+                        allRows.forEach(row => row.style.display = 'none');
+
+                        // Show only filtered + paginated rows
+                        filtered.forEach((row, index) => {
                             row.style.display = (index >= start && index < end) ? '' : 'none';
                         });
+
+                        // Update count text
+                        const countText = searchTerm
+                            ? `พบ ${totalFiltered} จาก ${allRows.length} รายการ`
+                            : `ทั้งหมด ${allRows.length} รายการ`;
+                        const countEl = document.getElementById('stockFilterCount');
+                        if (countEl) countEl.textContent = countText;
                     }
 
+                    // Search input handler
+                    searchInput.addEventListener('input', function() {
+                        searchTerm = this.value.trim().toLowerCase();
+                        currentPage = 1;
+                        clearBtn.classList.toggle('hidden', !searchTerm);
+                        updatePagination();
+                    });
+
+                    // Clear button
+                    clearBtn.addEventListener('click', function() {
+                        searchInput.value = '';
+                        searchTerm = '';
+                        currentPage = 1;
+                        clearBtn.classList.add('hidden');
+                        searchInput.focus();
+                        updatePagination();
+                    });
+
                     window.changePage = function(delta) {
-                        const totalPages = Math.ceil(totalItems / perPage);
+                        const filtered = getFilteredRows();
+                        const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
                         const newPage = currentPage + delta;
                         if (newPage >= 1 && newPage <= totalPages) {
                             currentPage = newPage;

@@ -93,7 +93,8 @@
                         <th class="border px-4 py-2 text-left">รหัสสินค้า</th>
                         <th class="border px-4 py-2 text-left">ชื่อสินค้า</th>
                         <th class="border px-4 py-2 text-left">เลขที่อ้างอิง</th>
-                        <th class="border px-4 py-2 text-left">จำนวน</th>
+                        <th class="border px-4 py-2 text-center">CTN</th>
+                        <th class="border px-4 py-2 text-center">Inner</th>
                         <th class="border px-4 py-2 text-left">วันที่</th>
                         <th class="border px-4 py-2 text-center">จัดการ</th>
                     </tr>
@@ -105,7 +106,8 @@
                             <td class="border px-4 py-2">{{ $stockOut->product->product_id ?? $stockOut->product_id }}</td>
                             <td class="border px-4 py-2">{{ $stockOut->product->name ?? '-' }}</td>
                             <td class="border px-4 py-2">{{ $stockOut->reference_no ?? '-' }}</td>
-                            <td class="border px-4 py-2">{{ $stockOut->quantity }}</td>
+                            <td class="border px-4 py-2 text-center">{{ $stockOut->quantity }}</td>
+                            <td class="border px-4 py-2 text-center">{{ $stockOut->fraction_qty ?? 0 }}</td>
                             <td class="border px-4 py-2">{{ $stockOut->issued_date }}</td>
                             <td class="border px-4 py-2 text-center whitespace-nowrap">
                                 <a href="{{ route('stock-outs.show', $stockOut->id) }}"
@@ -127,7 +129,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="border px-4 py-6 text-center text-gray-500">
+                            <td colspan="8" class="border px-4 py-6 text-center text-gray-500">
                                 @if(request()->hasAny(['search', 'date_from', 'date_to', 'product_from', 'product_to']))
                                     ไม่พบรายการที่ตรงกับเงื่อนไข
                                 @else
